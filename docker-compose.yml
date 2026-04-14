@@ -8,7 +8,6 @@ services:
     volumes:
       - ./uploads:/app/uploads
       - ./clips:/app/clips
-      - ./pipeline.db:/app/pipeline.db
+      - ./db.json:/app/db.json
     environment:
       - NODE_ENV=production
-      - GEMINI_API_KEY=${GEMINI_API_KEY:-}

@@ -2,8 +2,8 @@ FROM node:22-alpine
 
 WORKDIR /app
 
-# Install ffmpeg and build tools for native modules
-RUN apk add --no-cache ffmpeg python3 make g++
+# Install ffmpeg
+RUN apk add --no-cache ffmpeg
 
 # Copy package files
 COPY package.json package-lock.json* ./
