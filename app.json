@@ -1,0 +1,25 @@
+{
+  "name": "Pipeline.AI",
+  "description": "AI-powered video search and clipping — zero API keys needed",
+  "repository": "https://github.com/your-username/pipeline-ai",
+  "logo": "https://raw.githubusercontent.com/your-username/pipeline-ai/main/public/logo.png",
+  "keywords": ["video", "search", "ffmpeg", "ai"],
+  "env": {
+    "NODE_ENV": {
+      "description": "Runtime environment",
+      "value": "production"
+    },
+    "DATA_DIR": {
+      "description": "Directory for persistent storage (uploads, clips, database)",
+      "value": "/app/data"
+    }
+  },
+  "buildpacks": [{ "url": "heroku/nodejs" }],
+  "formation": {
+    "web": {
+      "quantity": 1,
+      "size": "eco"
+    }
+  },
+  "addons": []
+}

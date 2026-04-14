@@ -1,0 +1,9 @@
+dist
+node_modules
+*.cjs
+*.cjs.map
+coverage
+*.tsbuildinfo
+db.json
+uploads
+clips
