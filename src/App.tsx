@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Upload, Search, Play, Scissors, Loader2, CheckCircle2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -12,6 +12,11 @@ interface VideoRecord {
   filename: string;
   originalName: string;
   status: 'uploaded' | 'indexing' | 'indexed';
+  indexData?: {
+    transcripts: { text: string; start: number; end: number }[];
+    objects: { label: string; start: number; end: number }[];
+    scenes: { description: string; start: number; end: number }[];
+  };
 }
 
 interface SearchResult {
@@ -34,6 +39,10 @@ export default function App() {
   const [clipEnd, setClipEnd] = useState<number>(0);
   const [clipping, setClipping] = useState(false);
   const [clipUrl, setClipUrl] = useState<string | null>(null);
+
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<'all' | 'uploaded' | 'indexing' | 'indexed'>('all');
 
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -61,20 +70,54 @@ export default function App() {
     formData.append('video', file);
 
     setUploading(true);
+    setUploadProgress(0);
+    setUploadError(null);
     try {
-      const res = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
+      const data = await new Promise<any>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        
+        xhr.upload.addEventListener('progress', (event) => {
+          if (event.lengthComputable) {
+            const progress = Math.round((event.loaded * 100) / event.total);
+            setUploadProgress(progress);
+          }
+        });
+
+        xhr.addEventListener('load', () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              resolve(JSON.parse(xhr.responseText));
+            } catch (e) {
+              reject(new Error(`Invalid JSON response: ${xhr.responseText}`));
+            }
+          } else {
+            reject(new Error(`Server error ${xhr.status}: ${xhr.responseText}`));
+          }
+        });
+
+        xhr.addEventListener('error', () => {
+          reject(new Error('Network error occurred during upload'));
+        });
+
+        xhr.open('POST', '/api/upload');
+        xhr.send(formData);
       });
-      const data = await res.json();
       
       // Trigger indexing
-      await fetch(`/api/videos/${data.video.id}/index`, { method: 'POST' });
+      const indexRes = await fetch(`/api/videos/${data.video.id}/index`, { method: 'POST' });
+      if (!indexRes.ok) {
+        const text = await indexRes.text();
+        throw new Error(`Indexing failed: ${indexRes.status} ${text}`);
+      }
       fetchVideos();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Upload failed', err);
+      setUploadError(err.message || 'Upload failed');
     } finally {
       setUploading(false);
+      setUploadProgress(0);
+      // Clear the input so the same file can be uploaded again if needed
+      e.target.value = '';
     }
   };
 
@@ -141,7 +184,7 @@ export default function App() {
             <div className="w-3 h-3 bg-theme-accent"></div>
             <h1 className="text-xl font-black tracking-tighter uppercase">Pipeline.AI</h1>
           </div>
-          <div>
+          <div className="flex flex-col items-end gap-1">
             <label htmlFor="video-upload">
               <input
                 id="video-upload"
@@ -151,13 +194,19 @@ export default function App() {
                 onChange={handleUpload}
                 disabled={uploading}
               />
-              <Button asChild disabled={uploading} className="bg-theme-accent hover:bg-orange-600 text-white border border-theme-line rounded-none font-bold text-[11px] uppercase h-8">
-                <span>
-                  {uploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
-                  Upload Video
-                </span>
-              </Button>
+              <span className={buttonVariants({ variant: "default", className: "bg-theme-accent hover:bg-orange-600 text-white border border-theme-line rounded-none font-bold text-[11px] uppercase h-8 cursor-pointer w-36" }) + (uploading ? " opacity-50 pointer-events-none" : "")}>
+                {uploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+                {uploading ? `Uploading ${uploadProgress}%` : 'Upload Video'}
+              </span>
             </label>
+            {uploading && (
+              <Progress value={uploadProgress} className="h-1 w-36 rounded-none border border-theme-line bg-theme-bg [&>div]:bg-theme-accent" />
+            )}
+            {uploadError && (
+              <div className="text-[9px] text-red-500 font-bold uppercase mt-1 max-w-xs text-right">
+                {uploadError}
+              </div>
+            )}
           </div>
         </header>
 
@@ -208,11 +257,23 @@ export default function App() {
             </div>
 
             <div className="bg-white border border-theme-line">
-              <div className="font-serif italic text-[11px] px-2 py-1 border-b border-theme-line bg-[#f0f0f0] uppercase opacity-50">Library</div>
+              <div className="flex items-center justify-between px-2 py-1 border-b border-theme-line bg-[#f0f0f0]">
+                <div className="font-serif italic text-[11px] uppercase opacity-50">Library</div>
+                <select 
+                  value={statusFilter} 
+                  onChange={(e) => setStatusFilter(e.target.value as any)}
+                  className="text-[9px] font-mono bg-transparent border-none outline-none uppercase cursor-pointer text-theme-ink"
+                >
+                  <option value="all">All</option>
+                  <option value="uploaded">Uploaded</option>
+                  <option value="indexing">Indexing</option>
+                  <option value="indexed">Indexed</option>
+                </select>
+              </div>
               <div className="p-2">
                 <ScrollArea className="h-[200px]">
                   <div className="space-y-1">
-                    {videos.map(video => (
+                    {videos.filter(v => statusFilter === 'all' || v.status === statusFilter).map(video => (
                       <div key={video.id} className="flex items-center justify-between p-1.5 hover:bg-theme-ink hover:text-white cursor-pointer text-[13px] font-medium transition-colors">
                         <span className="truncate max-w-[120px]" title={video.originalName}>
                           {video.originalName}
@@ -230,8 +291,10 @@ export default function App() {
                         )}
                       </div>
                     ))}
-                    {videos.length === 0 && (
-                      <p className="text-[11px] opacity-50 text-center py-4">No videos uploaded yet.</p>
+                    {videos.filter(v => statusFilter === 'all' || v.status === statusFilter).length === 0 && (
+                      <p className="text-[11px] opacity-50 text-center py-4">
+                        {videos.length === 0 ? "No videos uploaded yet." : "No videos match the selected filter."}
+                      </p>
                     )}
                   </div>
                 </ScrollArea>
@@ -239,8 +302,8 @@ export default function App() {
             </div>
           </div>
 
-          {/* Right Column: Player & Clipping */}
-          <div className="lg:col-span-3 space-y-4">
+          {/* Middle Column: Player & Clipping */}
+          <div className="lg:col-span-2 space-y-4">
             <div className="bg-white border border-theme-line flex flex-col">
               <div className="relative bg-black flex items-center justify-center overflow-hidden" style={{ minHeight: '400px' }}>
                 {activeVideoFilename ? (
@@ -304,12 +367,67 @@ export default function App() {
                 {clipUrl && (
                   <div className="p-2 bg-white border border-theme-line flex items-center justify-between">
                     <span className="text-green-600 text-[11px] font-bold uppercase flex items-center"><span className="w-1.5 h-1.5 bg-green-500 rounded-full mr-2"></span> Clip generated</span>
-                    <Button asChild variant="outline" size="sm" className="border-theme-line text-theme-ink rounded-none h-6 text-[10px] uppercase font-bold">
-                      <a href={clipUrl} download>Download</a>
-                    </Button>
+                    <a href={clipUrl} download className={buttonVariants({ variant: "outline", size: "sm", className: "border-theme-line text-theme-ink rounded-none h-6 text-[10px] uppercase font-bold" })}>
+                      Download
+                    </a>
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+
+          {/* Right Column: Index Data (Transcript & Objects) */}
+          <div className="space-y-4 lg:col-span-1">
+            <div className="bg-white border border-theme-line">
+              <div className="font-serif italic text-[11px] px-2 py-1 border-b border-theme-line bg-[#f0f0f0] uppercase opacity-50">Transcript</div>
+              <ScrollArea className="h-[300px]">
+                <div className="p-2 space-y-1">
+                  {videos.find(v => v.id === activeVideo)?.indexData?.transcripts.map((t, idx) => (
+                    <div 
+                      key={idx} 
+                      className="text-[11px] leading-tight border-l-2 border-transparent hover:border-theme-accent pl-1.5 cursor-pointer py-1 hover:bg-[#fffcf0]"
+                      onClick={() => {
+                        if (videoRef.current) {
+                          videoRef.current.currentTime = t.start;
+                          videoRef.current.play();
+                        }
+                      }}
+                    >
+                      <span className="font-mono text-theme-accent mr-2">[{t.start}s]</span>
+                      {t.text}
+                    </div>
+                  ))}
+                  {!videos.find(v => v.id === activeVideo)?.indexData && (
+                    <p className="text-[10px] opacity-50 text-center py-4 uppercase font-mono">No index data available</p>
+                  )}
+                </div>
+              </ScrollArea>
+            </div>
+
+            <div className="bg-white border border-theme-line">
+              <div className="font-serif italic text-[11px] px-2 py-1 border-b border-theme-line bg-[#f0f0f0] uppercase opacity-50">Detected Objects</div>
+              <ScrollArea className="h-[200px]">
+                <div className="p-2 flex flex-wrap gap-1">
+                  {videos.find(v => v.id === activeVideo)?.indexData?.objects.map((o, idx) => (
+                    <Badge 
+                      key={idx} 
+                      variant="outline" 
+                      className="text-[9px] font-mono rounded-none border-theme-line cursor-pointer hover:border-theme-accent hover:text-theme-accent"
+                      onClick={() => {
+                        if (videoRef.current) {
+                          videoRef.current.currentTime = o.start;
+                          videoRef.current.play();
+                        }
+                      }}
+                    >
+                      {o.label} ({o.start}s)
+                    </Badge>
+                  ))}
+                  {!videos.find(v => v.id === activeVideo)?.indexData && (
+                    <p className="text-[10px] opacity-50 text-center py-4 uppercase font-mono w-full">No objects detected</p>
+                  )}
+                </div>
+              </ScrollArea>
             </div>
           </div>
 

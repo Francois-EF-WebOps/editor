@@ -99,32 +99,40 @@ app.post('/api/videos/:id/index', (req, res) => {
   video.status = 'indexing';
   saveDb();
 
-  // Simulate async indexing process
+  // Simulate async indexing process (Faster process)
   setTimeout(() => {
     video.status = 'indexed';
     
-    // Generate some mock index data based on the video
-    // In a real app, this would call Whisper, YOLO, CLIP, or Gemini API
-    video.indexData = {
-      transcripts: [
-        { text: "Welcome to the tutorial.", start: 0, end: 2 },
-        { text: "Today we will learn about basketball.", start: 2.5, end: 5 },
-        { text: "Let's look at this amazing shot.", start: 6, end: 9 },
-        { text: "And that's how you score.", start: 10, end: 12 },
-      ],
-      objects: [
-        { label: "person", start: 0, end: 15 },
-        { label: "basketball", start: 3, end: 8 },
-        { label: "hoop", start: 6, end: 9 },
-      ],
-      scenes: [
-        { description: "Intro scene", start: 0, end: 2.5 },
-        { description: "Action shot on the court", start: 2.5, end: 10 },
-        { description: "Outro", start: 10, end: 15 },
-      ]
-    };
+    const transcripts = [];
+    const objects = [];
+    const scenes = [];
+    
+    // Generate 60 seconds of mock data with detailed timestamps
+    for (let i = 0; i < 60; i += 3) {
+      transcripts.push({ 
+        text: `Auto-generated transcript segment for timestamp ${i}s to ${i+3}s. The action continues here.`, 
+        start: i, 
+        end: i + 3 
+      });
+      
+      objects.push({ 
+        label: ["person", "car", "basketball", "hoop", "dog", "tree"][i % 6], 
+        start: i, 
+        end: i + 2 
+      });
+      
+      if (i % 12 === 0) {
+        scenes.push({ 
+          description: `Scene ${i/12 + 1}: Action sequence`, 
+          start: i, 
+          end: i + 12 
+        });
+      }
+    }
+
+    video.indexData = { transcripts, objects, scenes };
     saveDb();
-  }, 3000);
+  }, 1000); // Reduced from 3000ms to 1000ms for faster processing
 
   res.json({ success: true, message: 'Indexing started' });
 });
