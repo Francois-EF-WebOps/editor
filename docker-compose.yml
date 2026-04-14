@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./uploads:/app/uploads
+      - ./clips:/app/clips
+      - ./db.json:/app/db.json
+    environment:
+      - NODE_ENV=production
