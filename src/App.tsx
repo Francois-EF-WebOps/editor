@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Upload, Search, Play, Scissors, Loader2, CheckCircle2, Download } from 'lucide-react';
+import { Upload, Search, Play, Scissors, Loader2, CheckCircle2, Download, BarChart2 } from 'lucide-react';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -47,6 +47,23 @@ export default function App() {
   const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<'all' | 'uploaded' | 'indexing' | 'indexed'>('all');
+
+  const topObjects = React.useMemo(() => {
+    const counts: Record<string, number> = {};
+    videos.forEach(video => {
+      if (video.status === 'indexed' && video.indexData?.objects) {
+        // Use a Set to count distinct occurrences per video if we only want "videos containing this object"
+        // Or just count all occurrences. The prompt says "from distinct timestamp list indexed", 
+        // let's count all occurrences across all timestamps.
+        video.indexData.objects.forEach(obj => {
+          counts[obj.label] = (counts[obj.label] || 0) + 1;
+        });
+      }
+    });
+    return Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10);
+  }, [videos]);
 
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -139,16 +156,20 @@ export default function App() {
     }
   };
 
-  const handleSearch = async () => {
-    if (!searchQuery) {
+  const handleSearch = async (queryToSearch?: string | React.MouseEvent) => {
+    const q = typeof queryToSearch === 'string' ? queryToSearch : searchQuery;
+    if (!q) {
       setSearchResults([]);
       return;
     }
 
     try {
-      const res = await fetch(`/api/search?q=${encodeURIComponent(searchQuery)}`);
+      const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
       const data = await res.json();
       setSearchResults(data.results);
+      if (typeof queryToSearch === 'string') {
+        setSearchQuery(q);
+      }
     } catch (err) {
       console.error('Search failed', err);
     }
@@ -326,6 +347,39 @@ export default function App() {
                     {videos.filter(v => statusFilter === 'all' || v.status === statusFilter).length === 0 && (
                       <p className="text-[11px] opacity-50 text-center py-4">
                         {videos.length === 0 ? "No videos uploaded yet." : "No videos match the selected filter."}
+                      </p>
+                    )}
+                  </div>
+                </ScrollArea>
+              </div>
+            </div>
+
+            {/* Top 10 Recurrent Items */}
+            <div className="bg-white border border-theme-line flex flex-col">
+              <div className="p-3 border-b border-theme-line bg-theme-bg flex justify-between items-center">
+                <h2 className="text-[11px] font-mono uppercase tracking-wider font-semibold flex items-center gap-2">
+                  <BarChart2 className="w-4 h-4 text-theme-accent" /> Top 10 Indexed Objects
+                </h2>
+              </div>
+              <div className="p-2">
+                <ScrollArea className="h-[200px]">
+                  <div className="space-y-1">
+                    {topObjects.map(([label, count], index) => (
+                      <div 
+                        key={label} 
+                        onClick={() => handleSearch(label)}
+                        className="flex items-center justify-between p-1.5 hover:bg-theme-ink hover:text-white cursor-pointer text-[13px] font-medium transition-colors"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-mono text-theme-accent opacity-70 w-4">{index + 1}.</span>
+                          <span className="capitalize">{label}</span>
+                        </div>
+                        <Badge variant="secondary" className="text-[9px] rounded-none font-mono">{count}</Badge>
+                      </div>
+                    ))}
+                    {topObjects.length === 0 && (
+                      <p className="text-[11px] opacity-50 text-center py-4">
+                        No objects indexed yet.
                       </p>
                     )}
                   </div>
