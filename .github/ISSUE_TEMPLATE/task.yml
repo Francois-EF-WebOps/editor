@@ -1,0 +1,46 @@
+name: Work item
+description: Create one actionable, verifiable outcome
+title: "[TASK] "
+body:
+  - type: dropdown
+    id: type
+    attributes:
+      label: Type
+      options: [TASK, EPIC, RESEARCH, DECISION, RELEASE, BLOCKER]
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Outcome
+      description: State one independently verifiable result.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context and scope
+    validations:
+      required: false
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      value: |
+        - [ ]
+    validations:
+      required: true
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options: [P0, P1, P2, P3]
+      default: 2
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies and evidence links
+    validations:
+      required: false
